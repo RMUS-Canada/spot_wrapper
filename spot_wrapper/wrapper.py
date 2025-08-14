@@ -48,6 +48,10 @@ from bosdyn.client.gripper_camera_param import GripperCameraParamClient
 from bosdyn.client.image import ImageClient
 from bosdyn.client.lease import Lease
 from bosdyn.client.license import LicenseClient
+from bosdyn.client.keepalive import (
+    KeepaliveClient,
+    remove_all_policies,
+)
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
 from bosdyn.client.map_processing import MapProcessingServiceClient
 from bosdyn.client.payload_registration import PayloadNotAuthorizedError
@@ -466,6 +470,7 @@ class SpotWrapper:
                 self._spot_check_client = self._robot.ensure_client(SpotCheckClient.default_service_name)
                 self._mission_client = self._robot.ensure_client(MissionClient.default_service_name)
                 self._license_client = self._robot.ensure_client(LicenseClient.default_service_name)
+                self._keepalive_client = self._robot.ensure_client(KeepaliveClient.default_service_name)
                 if not self.gripperless and self._robot.has_arm():
                     self._gripper_cam_param_client = self._robot.ensure_client(
                         GripperCameraParamClient.default_service_name
@@ -686,7 +691,7 @@ class SpotWrapper:
             try:
                 logger.info("Trying to authenticate with robot...")
                 robot.authenticate(username, password)
-                robot.time_sync.wait_for_sync(10)
+                robot.time_sync.wait_for_sync(120)
                 logger.info("Successfully authenticated.")
                 authenticated = True
             except RpcError as err:
@@ -1633,3 +1638,7 @@ class SpotWrapper:
         self, mutate_request: world_object_pb2.MutateWorldObjectRequest
     ) -> world_object_pb2.MutateWorldObjectResponse:
         return self._spot_world_objects.mutate_world_objects(mutate_request)
+
+    def remove_all_policies(self) -> None:
+        """Remove all keepalive policies from the robot"""
+        remove_all_policies(self._keepalive_client, attempts=3)
