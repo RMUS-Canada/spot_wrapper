@@ -259,8 +259,10 @@ def fill_response_header(request: typing.Any, response: typing.Any) -> bool:
     if not hasattr(response, "header"):
         return False
     if hasattr(request, "header"):
-        response.header.request_header.CopyFrom(request.header)
-        response.header.request_received_timestamp.CopyFrom(request.header.request_timestamp)
+        if not response.header.HasField("request_header"):
+            response.header.request_header.CopyFrom(request.header)
+        if not response.header.HasField("request_received_timestamp"):
+            response.header.request_received_timestamp.CopyFrom(request.header.request_timestamp)
     response.header.error.code = response.header.error.code or CommonError.CODE_OK
     return True
 
@@ -678,7 +680,10 @@ class ProxiedUnaryRpcHandler(ProxiedRpcHandler):
 
     def __call__(self, request: typing.Any, context: grpc.ServicerContext) -> typing.Any:
         future = self._server.submit(request)
-        return future.result(timeout=context.time_remaining())
+        time_remaining = context.time_remaining()
+        if time_remaining is not None:
+            time_remaining = min(time_remaining, threading.TIMEOUT_MAX)
+        return future.result(timeout=time_remaining)
 
 
 class ProxiedStreamRpcHandler(ProxiedRpcHandler):
@@ -686,4 +691,7 @@ class ProxiedStreamRpcHandler(ProxiedRpcHandler):
 
     def __call__(self, request: typing.Any, context: grpc.ServicerContext) -> typing.Iterator:
         future = self._server.submit(request)
-        yield from future.result(timeout=context.time_remaining())
+        time_remaining = context.time_remaining()
+        if time_remaining is not None:
+            time_remaining = min(time_remaining, threading.TIMEOUT_MAX)
+        yield from future.result(timeout=time_remaining)
